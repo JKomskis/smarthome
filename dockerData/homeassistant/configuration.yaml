@@ -1,0 +1,43 @@
+
+# Loads default set of integrations. Do not remove.
+default_config:
+
+# Text to speech
+tts:
+  - platform: google_translate
+
+automation: !include automations.yaml
+script: !include scripts.yaml
+scene: !include scenes.yaml
+
+# For accessing externally
+homeassistant:
+  external_url: "https://jkomskis-ha.duckdns.org"
+
+http:
+  use_x_forwarded_for: true
+  trusted_proxies:
+    - 172.20.0.0/16
+    - 127.0.0.1
+  login_attempts_threshold: 5
+
+# saving data to influxdb
+influxdb:
+  api_version: 2
+  ssl: false
+  host: localhost
+  port: 8086
+  token: !secret influxdb_token
+  organization: !secret influxdb_org
+  bucket: homeassistant
+  max_retries: 3
+  measurement_attr: entity_id
+
+# System usage
+sensor:
+  - platform: systemmonitor
+    resources:
+      - type: processor_use
+      - type: disk_use_percent
+        arg: /config
+      - type: memory_use_percent

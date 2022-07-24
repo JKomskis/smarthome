@@ -1,0 +1,258 @@
+version: "3"
+
+services:
+  traefik:
+    container_name: traefik
+    image: traefik:2.8
+    # user: ${PUID}:${PGID}
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    ports:
+      - 80:80
+      - 443:443
+      - 8080:8080
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ${DATADIR}/traefik/data/acme.json:/acme.json
+    command:
+      - --entrypoints.web.address=:80
+      - --entrypoints.websecure.address=:443
+      - --providers.docker=true
+      - --providers.docker.exposedByDefault=false
+      - --providers.docker.network=traefik-network
+      - --certificatesresolvers.le.acme.email=${MY_EMAIL}
+      - --certificatesresolvers.le.acme.storage=/acme.json
+      - --certificatesresolvers.le.acme.httpchallenge=true
+      - --certificatesresolvers.le.acme.httpchallenge.entrypoint=web
+      - --api.insecure
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.middlewares.redirect-to-https.redirectscheme.scheme=https"
+      - "traefik.http.routers.redirs.rule=hostregexp(`{host:.+}`)"
+      - "traefik.http.routers.redirs.entrypoints=web"
+      - "traefik.http.routers.redirs.middlewares=redirect-to-https"
+    networks:
+      - traefik-network
+    extra_hosts:
+      - host.docker.internal:172.20.0.1
+    logging:
+      driver: loki
+      options:
+        loki-url: "http://localhost:3100/loki/api/v1/push"
+        max-size: "200m"
+
+  duckdns:
+    container_name: duckdns
+    image: lscr.io/linuxserver/duckdns
+    restart: unless-stopped
+    environment:
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - TZ=${TZ}
+      - SUBDOMAINS=${DUCKDNS_SUBDOMAINS}
+      - TOKEN=${DUCKDNS_TOKEN}
+      - LOG_FILE=false #optional
+    logging:
+      driver: loki
+      options:
+        loki-url: "http://localhost:3100/loki/api/v1/push"
+        max-size: "200m"
+
+  heimdall:
+    container_name: heimdall
+    image: linuxserver/heimdall
+    restart: unless-stopped
+    environment:
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - TZ=${TZ}
+    volumes:
+      - ${DATADIR}/heimdall:/config
+    ports:
+      - 9080:80
+      - 9443:443
+    logging:
+      driver: loki
+      options:
+        loki-url: "http://localhost:3100/loki/api/v1/push"
+        max-size: "200m"
+
+  watchtower:
+    container_name: watchtower
+    image: containrrr/watchtower
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - TZ=${TZ}
+      - WATCHTOWER_CLEANUP=true # deleting old unused images automatically
+      # optional for notifications
+      - WATCHTOWER_NOTIFICATIONS=email
+      - WATCHTOWER_NOTIFICATION_EMAIL_FROM=${EMAIL_FROM}
+      - WATCHTOWER_NOTIFICATION_EMAIL_TO=${WATCHTOWER_EMAIL_TO}
+      - WATCHTOWER_NOTIFICATION_EMAIL_SERVER=${SMTP_SERVER}
+      - WATCHTOWER_NOTIFICATION_EMAIL_SERVER_PORT=${SMTP_PORT}
+      - WATCHTOWER_NOTIFICATION_EMAIL_SERVER_USER=${SMTP_USER}
+      - WATCHTOWER_NOTIFICATION_EMAIL_SERVER_PASSWORD=${SMTP_PASSWORD}
+    logging:
+      driver: loki
+      options:
+        loki-url: "http://localhost:3100/loki/api/v1/push"
+        max-size: "200m"
+
+  loki:
+    container_name: loki
+    image: grafana/loki:2.6.0 # See https://github.com/grafana/loki/releases before upgrading
+    user: ${PUID}:${PGID}
+    restart: unless-stopped
+    ports:
+      - 127.0.0.1:3100:3100
+    volumes:
+      - ${DATADIR}/loki/config/loki-config.yaml:/etc/loki/loki-config.yaml
+      - ${DATADIR}/loki/data:/loki
+    command: -config.file=/etc/loki/loki-config.yaml
+    logging:
+      driver: loki
+      options:
+        loki-url: "http://localhost:3100/loki/api/v1/push"
+        max-size: "200m"
+
+  influxdb:
+    container_name: influxdb
+    image: influxdb:2.3
+    user: ${PUID}:${PGID}
+    restart: unless-stopped
+    ports:
+      - 8086:8086
+    volumes:
+      - "${DATADIR}/influxdb/config:/etc/influxdb2"
+      - "${DATADIR}/influxdb/data:/var/lib/influxdb2"
+    environment:
+      - DOCKER_INFLUXDB_INIT_MODE=setup
+      - DOCKER_INFLUXDB_INIT_USERNAME=admin
+      - DOCKER_INFLUXDB_INIT_PASSWORD=${INFLUXDB_PASSWORD}
+      - DOCKER_INFLUXDB_INIT_ORG=smarthome
+      - DOCKER_INFLUXDB_INIT_BUCKET=homeassistant
+    healthcheck:
+      test: [ "CMD", "curl", "-sI", "http://127.0.0.1:8086/ping" ]
+      interval: 5s
+      timeout: 1s
+      retries: 48
+    logging:
+      driver: loki
+      options:
+        loki-url: "http://localhost:3100/loki/api/v1/push"
+        max-size: "200m"
+
+  grafana:
+    container_name: grafana
+    image: grafana/grafana:9.0.2 # See https://grafana.com/docs/grafana/next/setup-grafana/installation/docker/#migrate-from-previous-docker-containers-versions before upgrading
+    user: ${PUID}:${PGID}
+    restart: unless-stopped
+    depends_on:
+      influxdb:
+        condition: service_healthy
+    volumes:
+      - "${DATADIR}/grafana/data:/var/lib/grafana"
+    ports:
+      - 3000:3000
+    environment:
+      # - GF_AUTH_DISABLE_LOGIN_FORM=true
+      # - GF_AUTH_ANONYMOUS_ENABLED=true
+      # - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
+      - GF_SECURITY_ALLOW_EMBEDDING=true
+    logging:
+      driver: loki
+      options:
+        loki-url: "http://localhost:3100/loki/api/v1/push"
+        max-size: "200m"
+
+  mosquitto:
+    container_name: mosquitto
+    image: eclipse-mosquitto:2
+    user: ${PUID}:${PGID}
+    restart: unless-stopped
+    volumes:
+      - "${DATADIR}/mosquitto/config:/mosquitto/config"
+      - "${DATADIR}/mosquitto/data:/mosquitto/data"
+      - "${DATADIR}/mosquitto/log:/mosquitto/log"
+    ports:
+      - 1883:1883
+    logging:
+      driver: loki
+      options:
+        loki-url: "http://localhost:3100/loki/api/v1/push"
+        max-size: "200m"
+
+  homeassistant:
+    container_name: homeassistant
+    image: ghcr.io/home-assistant/home-assistant:2022.7
+    user: ${PUID}:${PGID}
+    restart: unless-stopped
+    devices:
+      - /dev/ttyUSB0:/dev/ttyUSB0
+    volumes:
+      - ${DATADIR}/homeassistant:/config
+      - /etc/localtime:/etc/localtime:ro
+      - /dev/serial/by-id/:/dev/serial/by-id/
+    depends_on:
+      influxdb:
+        condition: service_healthy
+      mosquitto:
+        condition: service_started
+    ports:
+      - 8123:8123
+    environment:
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - TZ=${TZ}
+    labels:
+      # don't automatically update this container in case of breaking changes
+      - com.centurylinklabs.watchtower.enable=false
+      - traefik.enable=true
+      # TODO: try replacing with env variables
+      - traefik.http.routers.ha.rule=Host(`jkomskis-ha.duckdns.org`)
+      - traefik.http.services.ha.loadbalancer.server.port=8123
+      - traefik.http.routers.ha.tls.certresolver=le
+      - traefik.http.routers.ha.entrypoints=websecure
+    network_mode: host
+    logging:
+      driver: loki
+      options:
+        loki-url: "http://localhost:3100/loki/api/v1/push"
+        max-size: "500m"
+  # zigbee2mqtt:
+  #   image: koenkk/zigbee2mqtt
+  #   depends_on:
+  #     mosquitto:
+  #       condition: service_started
+  #   restart: unless-stopped
+  #   volumes:
+  #     - ${DATADIR}/zigbee2mqtt/data:/app/data
+  #     - /run/udev:/run/udev:ro
+  #   # devices:
+  #   #   - /dev/ttyACM0:/dev/ttyACM0
+  #   environment:
+  #     - TZ=${TZ}
+  #   logging:
+  #     driver: loki
+  #     options:
+  #       loki-url: "http://localhost:3100/loki/api/v1/push"
+  #       max-size: "500m"
+
+  # zigbee2mqttAssistant:
+  #   image: carldebilly/zigbee2mqttassistant
+  #   restart: unless-stopped
+  #   depends_on:
+  #     zigbee2mqtt:
+  #       condition: service_started
+  #   environment:
+  #     - Z2MA_SETTINGS__MQTTSERVER=mosquitto
+  #     - TZ=${TZ}
+  #   ports:
+  #     - 8880:80
+
+networks:
+  traefik-network:
+    external: true
