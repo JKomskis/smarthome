@@ -37,11 +37,11 @@ services:
       - traefik-network
     extra_hosts:
       - host.docker.internal:172.20.0.1
-    logging:
-      driver: loki
-      options:
-        loki-url: "http://localhost:3100/loki/api/v1/push"
-        max-size: "200m"
+    # logging:
+    #   driver: loki
+    #   options:
+    #     loki-url: "http://localhost:3100/loki/api/v1/push"
+    #     max-size: "200m"
 
   duckdns:
     container_name: duckdns
@@ -54,11 +54,11 @@ services:
       - SUBDOMAINS=${DUCKDNS_SUBDOMAINS}
       - TOKEN=${DUCKDNS_TOKEN}
       - LOG_FILE=false #optional
-    logging:
-      driver: loki
-      options:
-        loki-url: "http://localhost:3100/loki/api/v1/push"
-        max-size: "200m"
+    # logging:
+    #   driver: loki
+    #   options:
+    #     loki-url: "http://localhost:3100/loki/api/v1/push"
+    #     max-size: "200m"
 
   heimdall:
     container_name: heimdall
@@ -73,11 +73,11 @@ services:
     ports:
       - 9080:80
       - 9443:443
-    logging:
-      driver: loki
-      options:
-        loki-url: "http://localhost:3100/loki/api/v1/push"
-        max-size: "200m"
+    # logging:
+    #   driver: loki
+    #   options:
+    #     loki-url: "http://localhost:3100/loki/api/v1/push"
+    #     max-size: "200m"
 
   watchtower:
     container_name: watchtower
@@ -95,28 +95,28 @@ services:
       - WATCHTOWER_NOTIFICATION_EMAIL_SERVER_PORT=${SMTP_PORT}
       - WATCHTOWER_NOTIFICATION_EMAIL_SERVER_USER=${SMTP_USER}
       - WATCHTOWER_NOTIFICATION_EMAIL_SERVER_PASSWORD=${SMTP_PASSWORD}
-    logging:
-      driver: loki
-      options:
-        loki-url: "http://localhost:3100/loki/api/v1/push"
-        max-size: "200m"
+    # logging:
+    #   driver: loki
+    #   options:
+    #     loki-url: "http://localhost:3100/loki/api/v1/push"
+    #     max-size: "200m"
 
-  loki:
-    container_name: loki
-    image: grafana/loki:2.6.0 # See https://github.com/grafana/loki/releases before upgrading
-    user: ${PUID}:${PGID}
-    restart: unless-stopped
-    ports:
-      - 127.0.0.1:3100:3100
-    volumes:
-      - ${DATADIR}/loki/config/loki-config.yaml:/etc/loki/loki-config.yaml
-      - ${DATADIR}/loki/data:/loki
-    command: -config.file=/etc/loki/loki-config.yaml
-    logging:
-      driver: loki
-      options:
-        loki-url: "http://localhost:3100/loki/api/v1/push"
-        max-size: "200m"
+    # loki:
+    #   container_name: loki
+    #   image: grafana/loki:2.6.0 # See https://github.com/grafana/loki/releases before upgrading
+    #   user: ${PUID}:${PGID}
+    #   restart: unless-stopped
+    #   ports:
+    #     - 127.0.0.1:3100:3100
+    #   volumes:
+    #     - ${DATADIR}/loki/config/loki-config.yaml:/etc/loki/loki-config.yaml
+    #     - ${DATADIR}/loki/data:/loki
+    #   command: -config.file=/etc/loki/loki-config.yaml
+    #   logging:
+    #     driver: loki
+    #     options:
+    #       loki-url: "http://localhost:3100/loki/api/v1/push"
+    #       max-size: "200m"
 
   influxdb:
     container_name: influxdb
@@ -139,11 +139,11 @@ services:
       interval: 5s
       timeout: 1s
       retries: 48
-    logging:
-      driver: loki
-      options:
-        loki-url: "http://localhost:3100/loki/api/v1/push"
-        max-size: "200m"
+    # logging:
+    #   driver: loki
+    #   options:
+    #     loki-url: "http://localhost:3100/loki/api/v1/push"
+    #     max-size: "200m"
 
   grafana:
     container_name: grafana
@@ -162,11 +162,11 @@ services:
       # - GF_AUTH_ANONYMOUS_ENABLED=true
       # - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
       - GF_SECURITY_ALLOW_EMBEDDING=true
-    logging:
-      driver: loki
-      options:
-        loki-url: "http://localhost:3100/loki/api/v1/push"
-        max-size: "200m"
+    # logging:
+    #   driver: loki
+    #   options:
+    #     loki-url: "http://localhost:3100/loki/api/v1/push"
+    #     max-size: "200m"
 
   mosquitto:
     container_name: mosquitto
@@ -179,11 +179,11 @@ services:
       - "${DATADIR}/mosquitto/log:/mosquitto/log"
     ports:
       - 1883:1883
-    logging:
-      driver: loki
-      options:
-        loki-url: "http://localhost:3100/loki/api/v1/push"
-        max-size: "200m"
+    # logging:
+    #   driver: loki
+    #   options:
+    #     loki-url: "http://localhost:3100/loki/api/v1/push"
+    #     max-size: "200m"
 
   homeassistant:
     container_name: homeassistant
@@ -217,11 +217,11 @@ services:
       - traefik.http.routers.ha.tls.certresolver=le
       - traefik.http.routers.ha.entrypoints=websecure
     network_mode: host
-    logging:
-      driver: loki
-      options:
-        loki-url: "http://localhost:3100/loki/api/v1/push"
-        max-size: "500m"
+    # logging:
+    #   driver: loki
+    #   options:
+    #     loki-url: "http://localhost:3100/loki/api/v1/push"
+    #     max-size: "500m"
   # zigbee2mqtt:
   #   image: koenkk/zigbee2mqtt
   #   depends_on:
