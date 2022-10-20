@@ -1,6 +1,29 @@
 version: "3"
 
 services:
+  adguard:
+    container_name: adguard
+    image: adguard/adguardhome
+    # user: ${PUID}:${PGID}
+    restart: unless-stopped
+    ports:
+      - "53:53/tcp"
+      - "53:53/udp"
+      - 3001:3000
+    volumes:
+      - ${DATADIR}/adguard/config:/opt/adguardhome/conf/
+      - ${DATADIR}/adguard/data:/opt/adguardhome/work/data/
+    networks:
+      - default
+      - traefik-network
+    labels:
+      - traefik.enable=true
+      # TODO: try replacing with env variables
+      - traefik.http.routers.adguard.rule=Host(`adguard.jkomskis.com`)
+      - traefik.http.services.adguard.loadbalancer.server.port=3000
+      - traefik.http.routers.adguard.tls.certresolver=le
+      - traefik.http.routers.adguard.entrypoints=websecure
+
   traefik:
     container_name: traefik
     image: traefik:2.8
@@ -36,12 +59,7 @@ services:
     networks:
       - traefik-network
     extra_hosts:
-      - host.docker.internal:172.20.0.1
-    # logging:
-    #   driver: loki
-    #   options:
-    #     loki-url: "http://localhost:3100/loki/api/v1/push"
-    #     max-size: "200m"
+      - host.docker.internal:172.19.0.1
 
   duckdns:
     container_name: duckdns
@@ -54,30 +72,6 @@ services:
       - SUBDOMAINS=${DUCKDNS_SUBDOMAINS}
       - TOKEN=${DUCKDNS_TOKEN}
       - LOG_FILE=false #optional
-    # logging:
-    #   driver: loki
-    #   options:
-    #     loki-url: "http://localhost:3100/loki/api/v1/push"
-    #     max-size: "200m"
-
-  heimdall:
-    container_name: heimdall
-    image: linuxserver/heimdall
-    restart: unless-stopped
-    environment:
-      - PUID=${PUID}
-      - PGID=${PGID}
-      - TZ=${TZ}
-    volumes:
-      - ${DATADIR}/heimdall:/config
-    ports:
-      - 9080:80
-      - 9443:443
-    # logging:
-    #   driver: loki
-    #   options:
-    #     loki-url: "http://localhost:3100/loki/api/v1/push"
-    #     max-size: "200m"
 
   watchtower:
     container_name: watchtower
@@ -95,28 +89,6 @@ services:
       - WATCHTOWER_NOTIFICATION_EMAIL_SERVER_PORT=${SMTP_PORT}
       - WATCHTOWER_NOTIFICATION_EMAIL_SERVER_USER=${SMTP_USER}
       - WATCHTOWER_NOTIFICATION_EMAIL_SERVER_PASSWORD=${SMTP_PASSWORD}
-    # logging:
-    #   driver: loki
-    #   options:
-    #     loki-url: "http://localhost:3100/loki/api/v1/push"
-    #     max-size: "200m"
-
-    # loki:
-    #   container_name: loki
-    #   image: grafana/loki:2.6.0 # See https://github.com/grafana/loki/releases before upgrading
-    #   user: ${PUID}:${PGID}
-    #   restart: unless-stopped
-    #   ports:
-    #     - 127.0.0.1:3100:3100
-    #   volumes:
-    #     - ${DATADIR}/loki/config/loki-config.yaml:/etc/loki/loki-config.yaml
-    #     - ${DATADIR}/loki/data:/loki
-    #   command: -config.file=/etc/loki/loki-config.yaml
-    #   logging:
-    #     driver: loki
-    #     options:
-    #       loki-url: "http://localhost:3100/loki/api/v1/push"
-    #       max-size: "200m"
 
   influxdb:
     container_name: influxdb
@@ -139,11 +111,6 @@ services:
       interval: 5s
       timeout: 1s
       retries: 48
-    # logging:
-    #   driver: loki
-    #   options:
-    #     loki-url: "http://localhost:3100/loki/api/v1/push"
-    #     max-size: "200m"
 
   grafana:
     container_name: grafana
@@ -158,15 +125,19 @@ services:
     ports:
       - 3000:3000
     environment:
-      # - GF_AUTH_DISABLE_LOGIN_FORM=true
-      # - GF_AUTH_ANONYMOUS_ENABLED=true
-      # - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD}
       - GF_SECURITY_ALLOW_EMBEDDING=true
-    # logging:
-    #   driver: loki
-    #   options:
-    #     loki-url: "http://localhost:3100/loki/api/v1/push"
-    #     max-size: "200m"
+    labels:
+      - traefik.enable=true
+      # TODO: try replacing with env variables
+      - traefik.http.routers.grafana.rule=Host(`grafana.jkomskis.com`)
+      - traefik.http.services.grafana.loadbalancer.server.port=3000
+      - traefik.http.routers.grafana.tls.certresolver=le
+      - traefik.http.routers.grafana.entrypoints=websecure
+    networks:
+      - default
+      - traefik-network
 
   mosquitto:
     container_name: mosquitto
@@ -179,21 +150,17 @@ services:
       - "${DATADIR}/mosquitto/log:/mosquitto/log"
     ports:
       - 1883:1883
-    # logging:
-    #   driver: loki
-    #   options:
-    #     loki-url: "http://localhost:3100/loki/api/v1/push"
-    #     max-size: "200m"
 
   homeassistant:
     container_name: homeassistant
     image: ghcr.io/home-assistant/home-assistant:2022.7
-    user: ${PUID}:${PGID}
+    # user: ${PUID}:${PGID}
     restart: unless-stopped
     devices:
       - /dev/ttyUSB0:/dev/ttyUSB0
     volumes:
-      - ${DATADIR}/homeassistant:/config
+      - ${DATADIR}/homeassistant/config:/config
+      - ${DATADIR}/homeassistant/docker/run:/etc/services.d/home-assistant/run
       - /etc/localtime:/etc/localtime:ro
       - /dev/serial/by-id/:/dev/serial/by-id/
     depends_on:
@@ -212,46 +179,31 @@ services:
       - com.centurylinklabs.watchtower.enable=false
       - traefik.enable=true
       # TODO: try replacing with env variables
-      - traefik.http.routers.ha.rule=Host(`jkomskis-ha.duckdns.org`)
+      - traefik.http.routers.ha.rule=Host(`ha.jkomskis.com`)
       - traefik.http.services.ha.loadbalancer.server.port=8123
       - traefik.http.routers.ha.tls.certresolver=le
       - traefik.http.routers.ha.entrypoints=websecure
     network_mode: host
-    # logging:
-    #   driver: loki
-    #   options:
-    #     loki-url: "http://localhost:3100/loki/api/v1/push"
-    #     max-size: "500m"
-  # zigbee2mqtt:
-  #   image: koenkk/zigbee2mqtt
-  #   depends_on:
-  #     mosquitto:
-  #       condition: service_started
-  #   restart: unless-stopped
-  #   volumes:
-  #     - ${DATADIR}/zigbee2mqtt/data:/app/data
-  #     - /run/udev:/run/udev:ro
-  #   # devices:
-  #   #   - /dev/ttyACM0:/dev/ttyACM0
-  #   environment:
-  #     - TZ=${TZ}
-  #   logging:
-  #     driver: loki
-  #     options:
-  #       loki-url: "http://localhost:3100/loki/api/v1/push"
-  #       max-size: "500m"
 
-  # zigbee2mqttAssistant:
-  #   image: carldebilly/zigbee2mqttassistant
-  #   restart: unless-stopped
-  #   depends_on:
-  #     zigbee2mqtt:
-  #       condition: service_started
-  #   environment:
-  #     - Z2MA_SETTINGS__MQTTSERVER=mosquitto
-  #     - TZ=${TZ}
-  #   ports:
-  #     - 8880:80
+  zigbee2mqtt:
+    container_name: zigbee2mqtt
+    image: koenkk/zigbee2mqtt:1.26.0
+    user: ${PUID}:${PGID}
+    group_add:
+      - dialout
+    depends_on:
+      mosquitto:
+        condition: service_started
+    restart: unless-stopped
+    volumes:
+      - ${DATADIR}/zigbee2mqtt/data:/app/data/
+      - /run/udev:/run/udev:ro
+    devices:
+      - /dev/ttyUSB0:/dev/ttyUSB0
+    environment:
+      - TZ=${TZ}
+    ports:
+      - 8081:8080
 
 networks:
   traefik-network:

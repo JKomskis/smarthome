@@ -3,3 +3,23 @@
 
 # Home Assistant secrets file
 secrets.yaml
+
+# Traefik certs file
+acme.json
+
+# Pycache files
+__pycache__
+
+# Files in data folders, except for gitkeep
+dockerData/**/data/**
+!dockerData/**/data/**/.gitkeep
+
+# Files in config folders, unless allowed
+dockerData/**/config/**
+!dockerData/**/config/.gitkeep
+!dockerData/adguard/config/AdGuardHome.yaml.template
+!dockerData/mosquitto/config/mosquitto.conf
+
+# Files in log folders, except for gitkeep
+dockerData/**/log/**
+!dockerData/**/log/**/.gitkeep
